@@ -7,6 +7,8 @@ const State = {
   mode: null,          // 'online' | 'local2p' | 'ai'
   formation: null,     // 'futsal' | 'campo'
   tacticalFormation: "4-3-3",
+  playerEra: "all",
+  includeLegends: false,
   phase: "menu",       // menu | lobby | auction | end
   players: [           // index 0 = P1 (humano principal), 1 = P2 ou IA
     { name: "Jogador 1", budget: 0, squad: {}, filled: new Set() },
@@ -16,6 +18,7 @@ const State = {
   queue: [],
   current: null,
   currentBid: 0,
+  pendingIncrement: 0,
   lastBidder: null,    // 0 | 1 | null
   noBidPasses: 0,
   turn: 0,             // 0 ou 1
@@ -83,6 +86,14 @@ function bindMenu() {
       State.ai = new AuctionAI(FORMATIONS.campo.budget, "campo", State.tacticalFormation);
     }
   };
+  document.getElementById("player-era").onchange = event => {
+    State.playerEra = event.target.value;
+    updateEraSummary();
+  };
+  document.getElementById("include-legends").onchange = event => {
+    State.includeLegends = event.target.checked;
+    updateEraSummary();
+  };
 
   document.getElementById("btn-start-game").onclick = startAuction;
 
@@ -123,7 +134,11 @@ function chooseMode(mode) {
 function chooseFormation(key) {
   State.formation = key;
   State.tacticalFormation = "4-3-3";
+  State.playerEra = "all";
+  State.includeLegends = false;
   document.getElementById("tactical-formation").value = State.tacticalFormation;
+  document.getElementById("player-era").value = State.playerEra;
+  document.getElementById("include-legends").checked = false;
   document.getElementById("tactical-choice").style.display = key === "campo" ? "block" : "none";
   const f = getFormation(key, State.tacticalFormation);
   State.players[0].budget = f.budget;
@@ -151,12 +166,74 @@ function chooseFormation(key) {
   document.getElementById("lobby-budget").textContent = `R$ ${f.budget}`;
   document.getElementById("lobby-slots").textContent = f.slots.length + " jogadores";
   updateTacticalSummary();
+  updateEraSummary();
   show("screen-lobby");
   renderFormationPreview();
 }
 
 function getCurrentFormation() {
   return getFormation(State.formation, State.tacticalFormation);
+}
+
+function getAvailablePlayers() {
+  if (State.playerEra === "all") return PLAYERS_DB;
+
+  const ranges = {
+    "2000s": [2000, 2009],
+    "2010s": [2010, 2019],
+    "2020s": [2020, 2027]
+  };
+  const [rangeStart, rangeEnd] = ranges[State.playerEra] || ranges["2000s"];
+  return PLAYERS_DB.filter(player => {
+    const years = (player.era || "").match(/\d{4}/g)?.map(Number) || [];
+    if (!years.length) return State.includeLegends && /lenda/i.test(player.era || "");
+    const start = years[0];
+    const end = years[1] || start;
+    return (start <= rangeEnd && end >= rangeStart) ||
+      (State.includeLegends && /lenda/i.test(player.era || ""));
+  });
+}
+
+function getPlayerPoolIssues() {
+  const players = getAvailablePlayers();
+  const formation = getCurrentFormation();
+  if (formation.surface === "futsal") {
+    const roleRequirements = [
+      { label: "goleiro", positions: ["GK"] },
+      { label: "fixo", positions: ["DEF", "CB", "LB", "RB", "CDM"] },
+      { label: "ponta esquerda", positions: ["LW", "LM"] },
+      { label: "ponta direita", positions: ["RW", "RM"] },
+      { label: "meio/ataque", positions: ["CM", "CAM", "CDM", "ST", "CF"] }
+    ];
+    return roleRequirements
+      .filter(role => !players.some(player => role.positions.includes(player.pos)))
+      .map(role => role.label);
+  }
+
+  const zonePositions = {
+    defense: ["DEF", "CB", "LB", "RB"],
+    midfield: ["CDM", "CM", "CAM"],
+    attack: ["LW", "LM", "RW", "RM", "ST", "CF"]
+  };
+  return [
+    ...(players.some(player => player.pos === "GK") ? [] : ["goleiro"]),
+    ...formation.zones
+      .filter(zone => players.filter(player => zonePositions[zone.id].includes(player.pos)).length < zone.slots.length)
+      .map(zone => zone.label.toLowerCase())
+  ];
+}
+
+function updateEraSummary() {
+  const summary = document.getElementById("era-summary");
+  const issues = getPlayerPoolIssues();
+  const startButton = document.getElementById("btn-start-game");
+  if (startButton) startButton.disabled = issues.length > 0;
+  if (summary) {
+    summary.classList.toggle("warning", issues.length > 0);
+    summary.textContent = issues.length
+      ? `Sem atletas suficientes para: ${issues.join(", ")}. Escolha outra época.`
+      : `${getAvailablePlayers().length} jogadores disponíveis`;
+  }
 }
 
 function updateTacticalSummary() {
@@ -238,11 +315,13 @@ function handlePeerMsg(data) {
   if (data.type === "start") {
     State.formation = data.formation;
     State.tacticalFormation = data.tacticalFormation || "4-3-3";
+    State.playerEra = data.playerEra || "all";
+    State.includeLegends = Boolean(data.includeLegends);
     State.queue = data.queue.map(id => PLAYERS_DB.find(p => p.id === id)).filter(Boolean);
     State.players[0].budget = FORMATIONS[data.formation].budget;
     State.players[1].budget = FORMATIONS[data.formation].budget;
-    State.players[0].name = "Você";
-    State.players[1].name = "Oponente";
+    State.players[0].name = State.isHost ? "Você" : "Oponente";
+    State.players[1].name = State.isHost ? "Oponente" : "Você";
     State.turn = data.hostStarts ? 1 : 0; // se host começa, eu (guest) sou turn 1
     if (!State.isHost) State.turn = data.hostStarts ? 1 : 0;
     else State.turn = data.hostStarts ? 0 : 1;
@@ -256,29 +335,31 @@ function handlePeerMsg(data) {
     updateAllUI();
   } else if (data.type === "bid") {
     State.currentBid = data.amount;
-    State.lastBidder = "opp";
+    State.lastBidder = data.by;
+    State.pendingIncrement = 0;
     State.noBidPasses = 0;
     State.history.unshift({ name: State.current?.name, amount: data.amount, by: "Oponente" });
-    State.turn = State.isHost ? 0 : 1; // minha vez
+    State.turn = activePlayerIndex();
     updateAuctionUI();
     updateAllUI();
     toast(`Oponente ofertou R$ ${data.amount}`);
   } else if (data.type === "pass") {
-    if (State.lastBidder === 0) {
-      awardTo(0);
-    } else if (State.lastBidder === null) {
+    if (State.lastBidder !== null) {
+      awardTo(State.lastBidder);
+    } else {
       State.noBidPasses += 1;
       if (State.noBidPasses >= 2) {
         toast("Ninguém quis o jogador. Próximo...");
         nextPlayer();
         return;
       }
-      State.turn = State.isHost ? 0 : 1;
+      State.turn = activePlayerIndex();
+      State.pendingIncrement = 0;
       updateAuctionUI();
+      updateAllUI();
     }
   } else if (data.type === "award") {
-    const winner = State.isHost ? data.winner : 1 - data.winner;
-    awardTo(winner, false);
+    awardTo(data.winner, false);
   }
 }
 
@@ -286,11 +367,17 @@ function handlePeerMsg(data) {
 function startAuction() {
   if (State.mode === "online" && State.isHost && State.conn) {
     const f = State.formation;
-    State.queue = shuffle(PLAYERS_DB).slice(0, f === "futsal" ? 30 : 45);
+    if (getPlayerPoolIssues().length) {
+      toast("A época escolhida não tem jogadores suficientes para todas as posições.");
+      return;
+    }
+    State.queue = shuffle(getAvailablePlayers());
     State.conn.send({
       type: "start",
       formation: f,
       tacticalFormation: State.tacticalFormation,
+      playerEra: State.playerEra,
+      includeLegends: State.includeLegends,
       queue: State.queue.map(p => p.id),
       hostStarts: true
     });
@@ -308,10 +395,14 @@ function startAuction() {
 
   // Local / AI
   const f = getCurrentFormation();
+  if (getPlayerPoolIssues().length) {
+    toast("A época escolhida não tem jogadores suficientes para todas as posições.");
+    return;
+  }
   if (State.mode === "ai") {
     State.ai = new AuctionAI(f.budget, State.formation, State.tacticalFormation);
   }
-  State.queue = shuffle(PLAYERS_DB).slice(0, State.formation === "futsal" ? 30 : 45);
+  State.queue = shuffle(getAvailablePlayers());
   State.turn = 0;
   State.gameStarted = true;
   State.phase = "auction";
@@ -326,11 +417,12 @@ function nextPlayer() {
   if (checkEnd()) return;
 
   if (State.queue.length === 0) {
-    State.queue = shuffle(PLAYERS_DB).slice(0, 15);
+    State.queue = shuffle(getAvailablePlayers());
   }
 
   State.current = State.queue.shift();
   State.currentBid = 0;
+  State.pendingIncrement = 0;
   State.lastBidder = null;
   State.noBidPasses = 0;
 
@@ -366,9 +458,7 @@ function updateAuctionUI() {
   document.getElementById("bid-value").textContent = "R$ " + State.currentBid;
 
   const turnEl = document.getElementById("turn-ind");
-  const isMyTurn = (State.mode === "ai" && State.turn === 0) ||
-                   (State.mode === "local2p") ||
-                   (State.mode === "online" && ((State.isHost && State.turn === 0) || (!State.isHost && State.turn === 1)));
+  const isMyTurn = canCurrentPlayerAct();
 
   if (State.mode === "local2p") {
     turnEl.className = "turn-indicator " + (State.turn === 0 ? "yours" : "opponent");
@@ -395,29 +485,21 @@ function updateAuctionUI() {
   }
 
   const controls = document.getElementById("bid-controls");
-  const canAct = (State.mode === "local2p") ||
-                 (State.mode === "ai" && State.turn === 0) ||
-                 (State.mode === "online" && isMyTurn);
-
+  const canAct = canCurrentPlayerAct();
   controls.style.display = canAct ? "flex" : "none";
-
-  const myBudget = State.mode === "local2p"
-    ? State.players[State.turn].budget
-    : State.players[0].budget;
-  const actor = State.mode === "local2p" ? State.turn : 0;
-  const hasSlot = Boolean(findSlot(State.players[actor], p));
-  controls.querySelectorAll("[data-increment]").forEach(button => {
-    const increment = Number(button.dataset.increment);
-    button.disabled = !hasSlot || State.currentBid + increment > myBudget;
-  });
+  updateBidComposer();
 }
 
-function doBid(increment) {
-  const amount = State.currentBid + increment;
-  const actor = State.mode === "local2p" ? State.turn : 0;
+function doBid() {
+  const actor = activePlayerIndex();
+  const amount = State.currentBid + State.pendingIncrement;
   const budget = State.players[actor].budget;
 
-  if (![1, 5, 10].includes(increment)) {
+  if (!canCurrentPlayerAct()) {
+    return;
+  }
+  if (State.pendingIncrement < 1) {
+    toast("Adicione +1, +5 ou +10 antes de enviar o lance.");
     return;
   }
   if (!findSlot(State.players[actor], State.current)) {
@@ -431,6 +513,7 @@ function doBid(increment) {
 
   State.currentBid = amount;
   State.lastBidder = actor;
+  State.pendingIncrement = 0;
   State.noBidPasses = 0;
   State.history.unshift({
     name: State.current.name,
@@ -439,7 +522,7 @@ function doBid(increment) {
   });
 
   if (State.mode === "online" && State.conn) {
-    State.conn.send({ type: "bid", amount, by: State.isHost ? 0 : 1 });
+    State.conn.send({ type: "bid", amount, by: actor });
   }
 
   // Passa a vez
@@ -459,11 +542,26 @@ function doBid(increment) {
 }
 
 function doPass() {
-  const actor = State.mode === "local2p" ? State.turn : 0;
+  const actor = activePlayerIndex();
+  State.pendingIncrement = 0;
 
   if (State.mode === "online" && State.conn) {
     State.conn.send({ type: "pass" });
-    if (State.lastBidder === "opp") return;
+    if (State.lastBidder !== null) {
+      State.turn = 1 - actor;
+      updateAuctionUI();
+      return;
+    }
+    State.noBidPasses += 1;
+    if (State.noBidPasses >= 2) {
+      toast("Ninguém quis o jogador. Próximo...");
+      nextPlayer();
+      return;
+    }
+    State.turn = 1 - actor;
+    updateAuctionUI();
+    updateAllUI();
+    return;
   }
 
   // Lógica de quem leva
@@ -487,11 +585,7 @@ function doPass() {
         nextPlayer();
         return;
       }
-      if (State.mode === "online") {
-        State.turn = State.isHost ? 1 : 0;
-      } else {
-        State.turn = 1 - State.turn;
-      }
+      State.turn = 1 - State.turn;
       updateAuctionUI();
       updateAllUI();
       return;
@@ -502,10 +596,6 @@ function doPass() {
       setTimeout(aiAct, 600);
       return;
     }
-    // online
-    State.turn = State.isHost ? 1 : 0;
-    updateAuctionUI();
-    return;
   }
 
   // Ambos passaram (lastBidder existe e o atual também passou)
@@ -520,6 +610,7 @@ function aiAct() {
   if (decision.action === "bid") {
     State.currentBid = decision.amount;
     State.lastBidder = 1;
+    State.pendingIncrement = 0;
     State.history.unshift({
       name: State.current.name,
       amount: decision.amount,
@@ -569,8 +660,7 @@ function awardTo(playerIndex, notifyOpponent = true) {
   State.history.unshift({ name: p.name, amount: price, by: who + " (venceu)" });
 
   if (State.mode === "online" && State.conn && notifyOpponent) {
-    const winner = State.isHost ? playerIndex : 1 - playerIndex;
-    State.conn.send({ type: "award", winner });
+    State.conn.send({ type: "award", winner: playerIndex });
   }
 
   updateAllUI();
@@ -739,7 +829,68 @@ function renderFormationPreview() {
 
 function bindGameButtons() {
   document.querySelectorAll("[data-increment]").forEach(button => {
-    button.onclick = () => doBid(Number(button.dataset.increment));
+    button.onclick = () => addBidIncrement(Number(button.dataset.increment));
   });
+  document.getElementById("btn-bid").onclick = doBid;
+  document.getElementById("btn-bid-clear").onclick = () => {
+    State.pendingIncrement = 0;
+    updateAuctionUI();
+  };
   document.getElementById("btn-pass").onclick = doPass;
+}
+
+function activePlayerIndex() {
+  if (State.mode === "local2p") return State.turn;
+  if (State.mode === "online") return State.isHost ? 0 : 1;
+  return 0;
+}
+
+function canCurrentPlayerAct() {
+  if (State.mode === "local2p") return true;
+  if (State.mode === "ai") return State.turn === 0;
+  if (State.mode === "online") return State.turn === activePlayerIndex();
+  return false;
+}
+
+function updateBidComposer() {
+  const actor = activePlayerIndex();
+  const budget = State.players[actor].budget;
+  const hasSlot = Boolean(State.current && findSlot(State.players[actor], State.current));
+  const canAct = canCurrentPlayerAct();
+  const projectedBid = State.currentBid + State.pendingIncrement;
+  const canRaise = [1, 5, 10].some(increment => projectedBid + increment <= budget);
+  document.getElementById("bid-increment-value").value = State.pendingIncrement;
+  document.getElementById("bid-projected-value").textContent = `R$ ${projectedBid}`;
+
+  const availability = document.getElementById("bid-availability");
+  availability.textContent = canAct && !hasSlot
+    ? "Seu elenco não tem vaga compatível para este jogador."
+    : canAct && !canRaise && State.pendingIncrement === 0
+      ? "Seu orçamento não permite aumentar este lance."
+      : canAct && !canRaise
+        ? "No limite do orçamento: envie o lance acumulado ou limpe o aumento."
+    : "";
+
+  document.querySelectorAll("[data-increment]").forEach(button => {
+    const increment = Number(button.dataset.increment);
+    button.disabled = !canAct || !hasSlot || projectedBid + increment > budget;
+  });
+  document.getElementById("btn-bid-clear").disabled = !canAct || State.pendingIncrement === 0;
+  document.getElementById("btn-bid").disabled =
+    !canAct || !hasSlot || State.pendingIncrement === 0 || projectedBid > budget;
+}
+
+function addBidIncrement(increment) {
+  if (![1, 5, 10].includes(increment) || !canCurrentPlayerAct()) return;
+  const actor = activePlayerIndex();
+  if (!findSlot(State.players[actor], State.current)) {
+    toast("Seu elenco não tem vaga compatível para este jogador.");
+    return;
+  }
+  if (State.currentBid + State.pendingIncrement + increment > State.players[actor].budget) {
+    toast("Esse aumento ultrapassa seu orçamento disponível.");
+    return;
+  }
+  State.pendingIncrement += increment;
+  updateBidComposer();
 }
