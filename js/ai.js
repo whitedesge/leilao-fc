@@ -24,7 +24,7 @@ class AuctionAI {
     if (!miss.length) return null;
     const p = player.pos;
 
-    if (p === "GK" && miss.includes("GK")) return "GK";
+    if (p === "GK") return miss.includes("GK") ? "GK" : null;
     if (["DEF", "CB"].includes(p)) {
       if (miss.includes("FIX")) return "FIX";
       if (miss.includes("CB1")) return "CB1";
@@ -53,7 +53,7 @@ class AuctionAI {
     // fallback
     if (miss.includes("MC")) return "MC";
     if (miss.includes("ST")) return "ST";
-    return miss[0];
+    return miss.find(slot => slot !== "GK") || null;
   }
 
   /**

@@ -148,10 +148,6 @@ const FORMATIONS = {
   }
 };
 
-function getStartPrice(ovr) {
-  return Math.max(5, Math.floor(ovr * 0.38 + Math.random() * 4));
-}
-
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {

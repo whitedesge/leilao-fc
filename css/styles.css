@@ -281,15 +281,13 @@ body {
   justify-content: center;
   flex-wrap: wrap;
 }
-.bid-controls input {
-  width: 110px;
-  padding: .7rem;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 1.05rem;
-  text-align: center;
+.bid-increments {
+  display: flex;
+  gap: .5rem;
+}
+.bid-increments .btn {
+  justify-content: center;
+  padding: .8rem 1rem;
 }
 
 /* Side */
@@ -462,7 +460,8 @@ body {
   .avatar { width: 76px; height: 76px; font-size: 1.7rem; }
   .bid-display .val { font-size: 2.1rem; }
   .bid-controls { flex-direction: column; align-items: stretch; }
-  .bid-controls input { width: 100%; }
+  .bid-increments { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .bid-increments .btn { padding: .8rem .4rem; }
 }
 
 ::-webkit-scrollbar { width: 5px; }

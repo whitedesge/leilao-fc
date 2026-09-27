@@ -94,10 +94,10 @@
         <p class="menu-sub" id="online-status">Inicializando PeerJS...</p>
 
         <div class="lobby-box" id="create-section" style="display:none;">
-          <h3>Código da Sala</h3>
+          <h3>Código visual da sala</h3>
           <div class="room-code" id="my-room-code">—</div>
-          <p class="peer-id-small">ID completo (cole este se o código não funcionar):<br><span id="my-peer-id"></span></p>
-          <p style="color:var(--muted);font-size:.88rem;margin-top:.6rem;">Compartilhe o ID completo com o amigo. Quem cria a sala escolhe o formato.</p>
+          <p class="peer-id-small">ID PeerJS para conectar:<br><span id="my-peer-id"></span></p>
+          <p style="color:var(--muted);font-size:.88rem;margin-top:.6rem;">Compartilhe o ID PeerJS completo. O código curto é apenas visual. Quem cria a sala escolhe o formato.</p>
         </div>
 
         <div class="lobby-box">
@@ -163,8 +163,11 @@
           <div class="turn-indicator yours" id="turn-ind">Seu turno</div>
 
           <div class="bid-controls" id="bid-controls">
-            <input type="number" id="bid-input" min="1" value="1" aria-label="Valor do lance" />
-            <button class="btn btn-gold" id="btn-bid">💰 Ofertar</button>
+            <div class="bid-increments" aria-label="Escolha o aumento do lance">
+              <button class="btn btn-gold" data-increment="1">Ofertar +1</button>
+              <button class="btn btn-gold" data-increment="5">Ofertar +5</button>
+              <button class="btn btn-gold" data-increment="10">Ofertar +10</button>
+            </div>
             <button class="btn btn-sec" id="btn-pass">Pular / Passar</button>
           </div>
         </div>
