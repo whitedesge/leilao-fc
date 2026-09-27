@@ -2,8 +2,8 @@
  * IA estratégica – prioriza posições vazias, controla orçamento e é levemente favorável ao humano
  */
 class AuctionAI {
-  constructor(budget, formationKey) {
-    this.formation = FORMATIONS[formationKey];
+  constructor(budget, formationKey, tacticalFormation) {
+    this.formation = getFormation(formationKey, tacticalFormation);
     this.budget = Math.floor(budget * 0.95); // leve desvantagem
     this.initial = this.budget;
     this.squad = {};
@@ -20,40 +20,7 @@ class AuctionAI {
 
   /** Mapeia posição do jogador para o melhor slot ainda livre */
   bestSlot(player) {
-    const miss = this.missing;
-    if (!miss.length) return null;
-    const p = player.pos;
-
-    if (p === "GK") return miss.includes("GK") ? "GK" : null;
-    if (["DEF", "CB"].includes(p)) {
-      if (miss.includes("FIX")) return "FIX";
-      if (miss.includes("CB1")) return "CB1";
-      if (miss.includes("CB2")) return "CB2";
-    }
-    if (p === "LB" && miss.includes("LB")) return "LB";
-    if (p === "RB" && miss.includes("RB")) return "RB";
-    if (p === "CDM" && miss.includes("CDM")) return "CDM";
-    if (["CM", "CAM"].includes(p)) {
-      if (miss.includes("CM1")) return "CM1";
-      if (miss.includes("CM2")) return "CM2";
-      if (miss.includes("MC")) return "MC";
-    }
-    if (["LW", "LM"].includes(p)) {
-      if (miss.includes("PE")) return "PE";
-      if (miss.includes("LW")) return "LW";
-    }
-    if (["RW", "RM"].includes(p)) {
-      if (miss.includes("PD")) return "PD";
-      if (miss.includes("RW")) return "RW";
-    }
-    if (["ST", "CF"].includes(p)) {
-      if (miss.includes("ST")) return "ST";
-      if (miss.includes("MC")) return "MC";
-    }
-    // fallback
-    if (miss.includes("MC")) return "MC";
-    if (miss.includes("ST")) return "ST";
-    return miss.find(slot => slot !== "GK") || null;
+    return findFormationSlot(this.formation, this.filled, player);
   }
 
   /**

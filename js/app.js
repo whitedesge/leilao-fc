@@ -6,6 +6,7 @@
 const State = {
   mode: null,          // 'online' | 'local2p' | 'ai'
   formation: null,     // 'futsal' | 'campo'
+  tacticalFormation: "4-3-3",
   phase: "menu",       // menu | lobby | auction | end
   players: [           // index 0 = P1 (humano principal), 1 = P2 ou IA
     { name: "Jogador 1", budget: 0, squad: {}, filled: new Set() },
@@ -62,6 +63,13 @@ function bindMenu() {
   document.getElementById("btn-form-futsal").onclick = () => chooseFormation("futsal");
   document.getElementById("btn-form-campo").onclick = () => chooseFormation("campo");
   document.getElementById("btn-back-form").onclick = () => show("screen-menu");
+  document.getElementById("tactical-formation").onchange = event => {
+    State.tacticalFormation = event.target.value;
+    updateTacticalSummary();
+    if (State.mode === "ai" && State.formation === "campo") {
+      State.ai = new AuctionAI(FORMATIONS.campo.budget, "campo", State.tacticalFormation);
+    }
+  };
 
   document.getElementById("btn-start-game").onclick = startAuction;
 
@@ -101,7 +109,10 @@ function chooseMode(mode) {
 
 function chooseFormation(key) {
   State.formation = key;
-  const f = FORMATIONS[key];
+  State.tacticalFormation = "4-3-3";
+  document.getElementById("tactical-formation").value = State.tacticalFormation;
+  document.getElementById("tactical-choice").style.display = key === "campo" ? "block" : "none";
+  const f = getFormation(key, State.tacticalFormation);
   State.players[0].budget = f.budget;
   State.players[0].name = State.mode === "local2p" ? "Jogador 1" : "Você";
   State.players[1].budget = f.budget;
@@ -116,18 +127,33 @@ function chooseFormation(key) {
   State.phase = "lobby";
 
   if (State.mode === "ai") {
-    State.ai = new AuctionAI(f.budget, key);
+    State.ai = new AuctionAI(f.budget, key, State.tacticalFormation);
   }
 
-  setBadge(key === "futsal" ? "Futsal · R$50" : "Campo 4-3-3 · R$150");
+  setBadge(key === "futsal" ? "Futsal · R$50" : `Campo ${State.tacticalFormation} · R$150`);
   document.getElementById("lobby-mode-label").textContent =
     State.mode === "ai" ? "Contra a Máquina" :
     State.mode === "local2p" ? "Local 2 Jogadores (mesmo dispositivo)" : "Online 1v1";
 
   document.getElementById("lobby-budget").textContent = `R$ ${f.budget}`;
   document.getElementById("lobby-slots").textContent = f.slots.length + " jogadores";
+  updateTacticalSummary();
   show("screen-lobby");
   renderFormationPreview();
+}
+
+function getCurrentFormation() {
+  return getFormation(State.formation, State.tacticalFormation);
+}
+
+function updateTacticalSummary() {
+  const summary = document.getElementById("formation-distribution");
+  if (!summary || State.formation !== "campo") return;
+  const counts = TACTICAL_FORMATIONS[State.tacticalFormation];
+  summary.textContent = `${counts.defense} na defesa · ${counts.midfield} no meio · ${counts.attack} no ataque · 1 goleiro`;
+  document.getElementById("lobby-slots").textContent =
+    `${counts.defense + counts.midfield + counts.attack + 1} jogadores`;
+  setBadge(`Campo ${State.tacticalFormation} · R$150`);
 }
 
 /* ========== ONLINE (PeerJS) ========== */
@@ -198,6 +224,7 @@ function setupConn(conn) {
 function handlePeerMsg(data) {
   if (data.type === "start") {
     State.formation = data.formation;
+    State.tacticalFormation = data.tacticalFormation || "4-3-3";
     State.queue = data.queue.map(id => PLAYERS_DB.find(p => p.id === id)).filter(Boolean);
     State.players[0].budget = FORMATIONS[data.formation].budget;
     State.players[1].budget = FORMATIONS[data.formation].budget;
@@ -208,7 +235,9 @@ function handlePeerMsg(data) {
     else State.turn = data.hostStarts ? 0 : 1;
     State.gameStarted = true;
     State.phase = "auction";
-    setBadge("Online 1v1 · " + (data.formation === "futsal" ? "Futsal" : "Campo"));
+    setBadge(data.formation === "futsal"
+      ? "Online 1v1 · Futsal"
+      : `Online 1v1 · ${State.tacticalFormation}`);
     show("screen-game");
     nextPlayer();
     updateAllUI();
@@ -248,13 +277,16 @@ function startAuction() {
     State.conn.send({
       type: "start",
       formation: f,
+      tacticalFormation: State.tacticalFormation,
       queue: State.queue.map(p => p.id),
       hostStarts: true
     });
     State.turn = 0;
     State.gameStarted = true;
     State.phase = "auction";
-    setBadge("Online 1v1");
+    setBadge(State.formation === "futsal"
+      ? "Online 1v1 · Futsal"
+      : `Online 1v1 · ${State.tacticalFormation}`);
     show("screen-game");
     nextPlayer();
     updateAllUI();
@@ -262,7 +294,10 @@ function startAuction() {
   }
 
   // Local / AI
-  const f = FORMATIONS[State.formation];
+  const f = getCurrentFormation();
+  if (State.mode === "ai") {
+    State.ai = new AuctionAI(f.budget, State.formation, State.tacticalFormation);
+  }
   State.queue = shuffle(PLAYERS_DB).slice(0, State.formation === "futsal" ? 30 : 45);
   State.turn = 0;
   State.gameStarted = true;
@@ -530,42 +565,11 @@ function awardTo(playerIndex, notifyOpponent = true) {
 }
 
 function findSlot(playerObj, playerCard) {
-  const f = FORMATIONS[State.formation];
-  const miss = f.slots.filter(s => !playerObj.filled.has(s));
-  if (!miss.length) return null;
-  const pos = playerCard.pos;
-
-  if (pos === "GK") return miss.includes("GK") ? "GK" : null;
-  if (["DEF", "CB"].includes(pos)) {
-    if (miss.includes("FIX")) return "FIX";
-    if (miss.includes("CB1")) return "CB1";
-    if (miss.includes("CB2")) return "CB2";
-  }
-  if (pos === "LB" && miss.includes("LB")) return "LB";
-  if (pos === "RB" && miss.includes("RB")) return "RB";
-  if (pos === "CDM" && miss.includes("CDM")) return "CDM";
-  if (["CM", "CAM"].includes(pos)) {
-    if (miss.includes("CM1")) return "CM1";
-    if (miss.includes("CM2")) return "CM2";
-    if (miss.includes("MC")) return "MC";
-  }
-  if (["LW", "LM"].includes(pos)) {
-    if (miss.includes("PE")) return "PE";
-    if (miss.includes("LW")) return "LW";
-  }
-  if (["RW", "RM"].includes(pos)) {
-    if (miss.includes("PD")) return "PD";
-    if (miss.includes("RW")) return "RW";
-  }
-  if (["ST"].includes(pos)) {
-    if (miss.includes("ST")) return "ST";
-    if (miss.includes("MC")) return "MC";
-  }
-  return miss.find(slot => slot !== "GK") || null;
+  return findFormationSlot(getCurrentFormation(), playerObj.filled, playerCard);
 }
 
 function checkEnd() {
-  const f = FORMATIONS[State.formation];
+  const f = getCurrentFormation();
   const need = f.slots.length;
   const p0done = State.players[0].filled.size >= need;
   const p1done = State.mode === "ai"
@@ -616,7 +620,7 @@ function endGame() {
   l0.innerHTML = "";
   Object.entries(State.players[0].squad).forEach(([slot, p]) => {
     const li = document.createElement("li");
-    li.textContent = `${slot}: ${p.name} (${p.ovr}) – R$${p.price}`;
+    li.textContent = `${f.labels[slot] || slot}: ${p.name} (${p.ovr}) – R$${p.price}`;
     l0.appendChild(li);
   });
 
@@ -625,14 +629,14 @@ function endGame() {
   const src = State.mode === "ai" ? State.ai.squad : State.players[1].squad;
   Object.entries(src).forEach(([slot, p]) => {
     const li = document.createElement("li");
-    li.textContent = `${slot}: ${p.name} (${p.ovr}) – R$${p.price}`;
+    li.textContent = `${f.labels[slot] || slot}: ${p.name} (${p.ovr}) – R$${p.price}`;
     l1.appendChild(li);
   });
 }
 
 /* ========== RENDER UI ========== */
 function updateAllUI() {
-  const f = FORMATIONS[State.formation];
+  const f = getCurrentFormation();
   if (!f) return;
 
   // Orçamentos
@@ -672,19 +676,47 @@ function renderPitch(containerId, playerObj, formation) {
   el.innerHTML = "";
   el.className = "pitch " + State.formation;
 
+  if (formation.zones) {
+    const zones = document.createElement("div");
+    zones.className = "pitch-zones";
+    formation.zones.forEach(zone => {
+      const zoneEl = document.createElement("div");
+      zoneEl.className = "pitch-zone";
+      zoneEl.dataset.zone = zone.id;
+      const label = document.createElement("span");
+      label.className = "pitch-zone-label";
+      label.textContent = zone.label;
+      const slots = document.createElement("div");
+      slots.className = "pitch-zone-slots";
+      zone.slots.forEach(slot => slots.appendChild(createPitchSlot(slot, playerObj, formation)));
+      zoneEl.append(label, slots);
+      zones.appendChild(zoneEl);
+    });
+    el.appendChild(zones);
+    const goalkeeper = document.createElement("div");
+    goalkeeper.className = "pitch-goalkeeper";
+    goalkeeper.appendChild(createPitchSlot(formation.goalkeeper, playerObj, formation));
+    el.appendChild(goalkeeper);
+    return;
+  }
+
   formation.slots.forEach(slot => {
-    const div = document.createElement("div");
-    div.className = "slot " + slot;
-    if (playerObj.squad[slot]) {
-      const p = playerObj.squad[slot];
-      div.innerHTML = `<span class="s-name">${p.name.split(" ").pop()}</span><span class="s-ovr">${p.ovr}</span>`;
-      div.classList.add("filled");
-      div.style.borderColor = ovrColor(p.ovr);
-    } else {
-      div.innerHTML = `<span class="s-empty">${formation.labels[slot] || slot}</span>`;
-    }
-    el.appendChild(div);
+    el.appendChild(createPitchSlot(slot, playerObj, formation));
   });
+}
+
+function createPitchSlot(slot, playerObj, formation) {
+  const div = document.createElement("div");
+  div.className = "slot " + slot;
+  if (playerObj.squad[slot]) {
+    const player = playerObj.squad[slot];
+    div.innerHTML = `<span class="s-name">${player.name.split(" ").pop()}</span><span class="s-ovr">${player.ovr}</span>`;
+    div.classList.add("filled");
+    div.style.borderColor = ovrColor(player.ovr);
+  } else {
+    div.innerHTML = `<span class="s-empty">${formation.labels[slot] || slot}</span>`;
+  }
+  return div;
 }
 
 function renderFormationPreview() {

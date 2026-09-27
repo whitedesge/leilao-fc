@@ -120,6 +120,15 @@
         <div class="lobby-box">
           <p>Orçamento por jogador: <strong id="lobby-budget">R$ 50</strong></p>
           <p>Elenco necessário: <strong id="lobby-slots">5 jogadores</strong></p>
+          <div id="tactical-choice" class="tactical-choice" style="display:none;">
+            <label for="tactical-formation">Formação de campo</label>
+            <select id="tactical-formation">
+              <option value="4-3-3">4-3-3</option>
+              <option value="4-4-2">4-4-2</option>
+              <option value="3-5-2">3-5-2</option>
+            </select>
+            <p id="formation-distribution" aria-live="polite"></p>
+          </div>
           <p style="color:var(--muted);font-size:.9rem;margin-top:1rem;">
             O leilão só começa quando você clicar em <strong>Iniciar Leilão</strong>.<br>
             Nenhum dinheiro é gasto automaticamente.

@@ -13,7 +13,9 @@ Site de **Leilão de Jogadores de Futebol** (2000–2027) no estilo EA FC Ultima
 ## Formatos
 
 - **Futsal**: R$ 50 · 5 jogadores (GK, Fixo, PE, PD, MC)
-- **Campo**: R$ 150 · 11 jogadores (4-3-3)
+- **Campo**: R$ 150 · 11 jogadores · formações 4-3-3, 4-4-2 ou 3-5-2
+
+No modo campo, cada formação define quantas vagas existem na defesa, no meio-campo e no ataque. O goleiro tem uma vaga exclusiva; jogadores só podem ocupar vagas da sua divisão.
 
 ## Fluxo
 

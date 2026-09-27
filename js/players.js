@@ -132,6 +132,7 @@ const PLAYERS_DB = [
 /** Posições e labels */
 const FORMATIONS = {
   futsal: {
+    surface: "futsal",
     budget: 50,
     slots: ["GK", "FIX", "PE", "PD", "MC"],
     labels: {
@@ -139,14 +140,73 @@ const FORMATIONS = {
     }
   },
   campo: {
+    surface: "campo",
     budget: 150,
-    slots: ["GK", "CB1", "CB2", "LB", "RB", "CDM", "CM1", "CM2", "LW", "ST", "RW"],
-    labels: {
-      GK: "Goleiro", CB1: "Zagueiro", CB2: "Zagueiro", LB: "Lat. Esq.", RB: "Lat. Dir.",
-      CDM: "Volante", CM1: "Meio", CM2: "Meio", LW: "Ponta Esq.", ST: "Centroavante", RW: "Ponta Dir."
-    }
+    slots: []
   }
 };
+
+const TACTICAL_FORMATIONS = {
+  "4-3-3": { defense: 4, midfield: 3, attack: 3 },
+  "4-4-2": { defense: 4, midfield: 4, attack: 2 },
+  "3-5-2": { defense: 3, midfield: 5, attack: 2 }
+};
+
+function getFormation(surface, tacticalFormation = "4-3-3") {
+  if (surface === "futsal") return FORMATIONS.futsal;
+
+  const counts = TACTICAL_FORMATIONS[tacticalFormation] || TACTICAL_FORMATIONS["4-3-3"];
+  const zones = [
+    { id: "attack", label: "Ataque", prefix: "ATT", count: counts.attack },
+    { id: "midfield", label: "Meio-campo", prefix: "MID", count: counts.midfield },
+    { id: "defense", label: "Defesa", prefix: "DEF", count: counts.defense }
+  ].map(zone => ({
+    ...zone,
+    slots: Array.from({ length: zone.count }, (_, index) => `${zone.prefix}${index + 1}`)
+  }));
+  const labels = { GK: "Goleiro" };
+
+  zones.forEach(zone => {
+    zone.slots.forEach((slot, index) => {
+      labels[slot] = `${zone.label} ${index + 1}`;
+    });
+  });
+
+  return {
+    surface: "campo",
+    budget: FORMATIONS.campo.budget,
+    tacticalFormation,
+    goalkeeper: "GK",
+    zones,
+    slots: ["GK", ...zones.flatMap(zone => zone.slots)],
+    labels
+  };
+}
+
+function findFormationSlot(formation, filled, player) {
+  const available = formation.slots.filter(slot => !filled.has(slot));
+  if (player.pos === "GK") return available.includes("GK") ? "GK" : null;
+
+  if (formation.surface === "futsal") {
+    const futsalSlots = {
+      FIX: ["DEF", "CB", "LB", "RB", "CDM"],
+      PE: ["LW", "LM"],
+      PD: ["RW", "RM"],
+      MC: ["CM", "CAM", "CDM", "ST", "CF"]
+    };
+    return ["FIX", "PE", "PD", "MC"].find(slot =>
+      available.includes(slot) && futsalSlots[slot].includes(player.pos)
+    ) || null;
+  }
+
+  const zoneByPosition = {
+    DEF: "defense", CB: "defense", LB: "defense", RB: "defense",
+    CDM: "midfield", CM: "midfield", CAM: "midfield",
+    LW: "attack", LM: "attack", RW: "attack", RM: "attack", ST: "attack", CF: "attack"
+  };
+  const zone = formation.zones.find(item => item.id === zoneByPosition[player.pos]);
+  return zone?.slots.find(slot => available.includes(slot)) || null;
+}
 
 function shuffle(arr) {
   const a = [...arr];
