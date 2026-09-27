@@ -584,6 +584,7 @@ function checkEnd() {
 }
 
 function endGame() {
+  const f = getCurrentFormation();
   State.phase = "end";
   show("screen-end");
 
