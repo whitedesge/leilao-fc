@@ -56,6 +56,19 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function bindMenu() {
+  document.getElementById("btn-home").onclick = () => {
+    if (State.peer) {
+      try { State.peer.destroy(); } catch (error) {}
+    }
+    State.peer = null;
+    State.conn = null;
+    State.mode = null;
+    State.phase = "menu";
+    State.gameStarted = false;
+    show("screen-menu");
+    setBadge("Menu");
+  };
+
   document.getElementById("btn-mode-ai").onclick = () => chooseMode("ai");
   document.getElementById("btn-mode-local").onclick = () => chooseMode("local2p");
   document.getElementById("btn-mode-online").onclick = () => chooseMode("online");
