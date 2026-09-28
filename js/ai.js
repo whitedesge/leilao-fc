@@ -53,13 +53,10 @@ class AuctionAI {
     // Chance de passar mesmo podendo (imprevisibilidade + favor humano)
     if (Math.random() < 0.22 && remainingSlots > 2) return { action: "pass" };
 
-    const increments = [1, 5, 10].filter(increment =>
-      currentBid + increment <= maxWilling && currentBid + increment <= this.budget
-    );
-    if (!increments.length) return { action: "pass" };
+    const increment = Math.max(1, Math.floor(1 + Math.random() * 3 + player.ovr * 0.02));
+    const amount = Math.min(currentBid + increment, maxWilling);
 
-    const increment = increments[Math.floor(Math.random() * increments.length)];
-    const amount = currentBid + increment;
+    if (amount <= currentBid) return { action: "pass" };
     return { action: "bid", amount, slot };
   }
 

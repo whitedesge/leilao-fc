@@ -17,15 +17,13 @@ Site de **Leilão de Jogadores de Futebol** (2000–2027) no estilo EA FC Ultima
 
 No modo campo, cada formação define quantas vagas existem na defesa, no meio-campo e no ataque. O goleiro tem uma vaga exclusiva; jogadores só podem ocupar vagas da sua divisão.
 
-Na preparação, também é possível filtrar os atletas por década (2000–2009, 2010–2019 ou 2020–2027) e, opcionalmente, incluir lendas fora do período. A seleção padrão mantém o elenco completo.
-
 ## Fluxo
 
 1. Escolha o modo e o formato
 2. Tela de **preparação** (elencos zerados, nenhum gasto automático)
 3. Clique em **Iniciar Leilão**
 4. A cada rodada um jogador é revelado
-5. Use **+1**, **+5** ou **+10** para compor o aumento e **Enviar lance** para confirmar; também é possível **Passar**
+5. Ações: **Ofertar** ou **Passar**
 6. Se um passa e o outro ofertado → o ofertante leva
 7. Se ambos passam → próximo jogador
 

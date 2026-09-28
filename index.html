@@ -129,20 +129,6 @@
             </select>
             <p id="formation-distribution" aria-live="polite"></p>
           </div>
-          <div class="era-choice">
-            <label for="player-era">Época dos jogadores</label>
-            <select id="player-era">
-              <option value="all">Todas as épocas e lendas</option>
-              <option value="2000s">2000–2009</option>
-              <option value="2010s">2010–2019</option>
-              <option value="2020s">2020–2027</option>
-            </select>
-            <label class="legend-toggle" for="include-legends">
-              <input id="include-legends" type="checkbox" />
-              Incluir lendas fora do período
-            </label>
-            <p id="era-summary" aria-live="polite"></p>
-          </div>
           <p style="color:var(--muted);font-size:.9rem;margin-top:1rem;">
             O leilão só começa quando você clicar em <strong>Iniciar Leilão</strong>.<br>
             Nenhum dinheiro é gasto automaticamente.
@@ -186,24 +172,12 @@
           <div class="turn-indicator yours" id="turn-ind">Seu turno</div>
 
           <div class="bid-controls" id="bid-controls">
-            <div class="bid-composer">
-              <div class="bid-increments" aria-label="Adicione valor ao lance">
-                <button class="btn btn-gold" type="button" data-increment="1">+1</button>
-                <button class="btn btn-gold" type="button" data-increment="5">+5</button>
-                <button class="btn btn-gold" type="button" data-increment="10">+10</button>
-              </div>
-              <div class="bid-entry">
-                <label for="bid-increment-value">Aumento acumulado</label>
-                <input id="bid-increment-value" type="number" value="0" readonly />
-                <span>Próximo lance: <strong id="bid-projected-value">R$ 0</strong></span>
-                <div class="bid-submit-actions">
-                  <button class="btn btn-sec" id="btn-bid-clear" type="button">Limpar</button>
-                  <button class="btn btn-gold" id="btn-bid" type="button">Enviar lance</button>
-                </div>
-              </div>
-              <p id="bid-availability" class="bid-availability" role="status" aria-live="polite"></p>
+            <div class="bid-increments" aria-label="Escolha o aumento do lance">
+              <button class="btn btn-gold" data-increment="1">Ofertar +1</button>
+              <button class="btn btn-gold" data-increment="5">Ofertar +5</button>
+              <button class="btn btn-gold" data-increment="10">Ofertar +10</button>
             </div>
-            <button class="btn btn-sec" id="btn-pass" type="button">Pular / Passar</button>
+            <button class="btn btn-sec" id="btn-pass">Pular / Passar</button>
           </div>
         </div>
 
